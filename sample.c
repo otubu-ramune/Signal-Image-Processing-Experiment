@@ -249,23 +249,34 @@ filteringImage(image_t *resultImage, image_t *originalImage)
         }
     }
 }
-
+/*======================================================================
+ *  数字をunsighed char型に合わせて
+ *  0-255までの数字にし，小数は四捨五入して返す 
+ *======================================================================
+ */
 int int_8bit(double num){
     if(num < 0)return 0;
     else if(255 < num ) return 255;
     else return round(num);
 }
 
+/*======================================================================
+ * imageのx,y座標の画素値を取得し返す
+ *======================================================================*/
 int
 get_pixel_value(image_t *image, int x, int y){
     if(x < 0 || image->width <= x)return 0;
     if(y < 0 || image->height <= y)return 0;
     return image->data[x + image->width * y];
 }
+
+/*======================================================================
+ * resultImageの端の処理を行う
+ *======================================================================*/
 void
 fillForEdge(image_t *resultImage, image_t *originalImage, int directions, int height , int width){
     int x,y;
-
+    // 上下左右の端の処理
     if(directions == 4){
         for(y=0; y<height; y++){
             resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
@@ -275,7 +286,9 @@ fillForEdge(image_t *resultImage, image_t *originalImage, int directions, int he
             resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
             resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
         }
-    }else if(directions == 2){
+    }
+    // 右と下の端の処理
+    else if(directions == 2){
         for(y=0; y<height; y++){
             resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
         }
@@ -284,9 +297,9 @@ fillForEdge(image_t *resultImage, image_t *originalImage, int directions, int he
         }
     }    
 }
-// (0)
+// (0) (1)
 void
-prewitt1Image(image_t *resultImage, image_t *originalImage)
+prewittImage(image_t *resultImage, image_t *originalImage, int method)
 {
     int     x, y;
     int     width, height;
@@ -296,91 +309,32 @@ prewitt1Image(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-    for(y=0; y<height; y++)
+    for(y=1; y<height-1; y++)
     {
-        for(x=0; x<width; x++)
+        for(x=1; x<width-1; x++)
         {
-            if(x==0 || y ==0 || y==height-1 || x==width-1){}
-            else{
-                int horizon=0;
-                int vertical=0;
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        horizon += i*get_pixel_value(originalImage, x+i, y+j);
-                    }
+            int horizon=0;
+            int vertical=0;
+            for(int i=-1; i<2; i++){
+                for(int j=-1; j<2; j++){
+                    horizon += i*get_pixel_value(originalImage, x+i, y+j);
+                    vertical += j*get_pixel_value(originalImage, x+i, y+j);
                 }
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        vertical += j*get_pixel_value(originalImage, x+i, y+j);
-                    }
-                }
-
-                resultImage->data[x+resultImage->width*y] =int_8bit( sqrt(pow(horizon,2)+pow(vertical,2)) );
             }
+            // 式(2)(3)の分岐を行う
+            if(method == 0) resultImage->data[x+resultImage->width*y] =int_8bit( sqrt(pow(horizon,2)+pow(vertical,2)) );
+            if(method == 1) resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(vertical) ); 
         }
     }
     fillForEdge(resultImage, originalImage, 4, height, width);
-
-    // for(y=0; y<height; y++){
-    //     resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
 }
 
-// (1)
+
+
+
+// (2) (3)
 void
-prewitt2Image(image_t *resultImage, image_t *originalImage)
-{
-    int     x, y;
-    int     width, height;
-
-    /* originalImage と resultImage のサイズが違う場合は、共通部分のみ */
-    /* を処理する。*/
-    width = min(originalImage->width, resultImage->width);
-    height = min(originalImage->height, resultImage->height);
-
-    for(y=0; y<height; y++)
-    {
-        for(x=0; x<width; x++)
-        {
-            if(x==0 || y ==0 || y==height-1 || x==width-1){}
-            else{
-                int horizon=0;
-                int verti=0;
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        horizon+= i*get_pixel_value(originalImage, x+i, y+j);
-                    }
-                }
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        verti+= j*get_pixel_value(originalImage, x+i, y+j);
-                    }
-                }
-
-                resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(verti) );
-            }
-        }
-    }
-
-    fillForEdge(resultImage, originalImage, 4, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
-}
-
-// (2)
-void
-sobel1Image(image_t *resultImage, image_t *originalImage)
+sobelImage(image_t *resultImage, image_t *originalImage, int method)
 {
     int     x, y;
     int     width, height;
@@ -396,93 +350,27 @@ sobel1Image(image_t *resultImage, image_t *originalImage)
     height = min(originalImage->height, resultImage->height);
 
 
-    for(y=0; y<height; y++)
+    for(y=1; y<height-1; y++)
     {
-        for(x=0; x<width; x++)
+        for(x=1; x<width-1; x++)
         {   
-            
-            if(x==0 || y ==0 || y==height-1 || x==width-1){}
-            else{
-                int horizon=0;
-                int verti=0;
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        horizon+= filter_horizon[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
-                    }
+            int horizon=0;
+            int verti=0;
+            for(int i=-1; i<2; i++){
+                for(int j=-1; j<2; j++){
+                    horizon+= filter_horizon[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
+                    verti+= filter_vertical[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
                 }
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        verti+= filter_vertical[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
-                    }
-                }
-
-                resultImage->data[x+resultImage->width*y] = int_8bit( sqrt(pow(horizon,2)+pow(verti,2)) );
             }
+            // 式(2)(3)の分岐を行う
+            if(method == 0)resultImage->data[x+resultImage->width*y] = int_8bit( sqrt(pow(horizon,2)+pow(verti,2)) );
+            if(method == 1)resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(verti) );
         }
     }
     fillForEdge(resultImage, originalImage, 4, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
 }
 
-// (3)
-void
-sobel2Image(image_t *resultImage, image_t *originalImage)
-{
-    int     x, y;
-    int     width, height;
-    int filter_horizon[9] = {-1, 0, 1,
-                             -2, 0, 2,
-                             -1, 0, 1};
-    int filter_vertical[9] = {-1, -2, -1,
-                              0, 0, 0,
-                              1, 2, 1};
-    /* originalImage と resultImage のサイズが違う場合は、共通部分のみ */
-    /* を処理する。*/
-    width = min(originalImage->width, resultImage->width);
-    height = min(originalImage->height, resultImage->height);
 
-
-    for(y=0; y<height; y++)
-    {
-        for(x=0; x<width; x++)
-        {   
-            
-            if(x==0 || y ==0 || y==height-1 || x==width-1){}
-            else{
-                int horizon=0;
-                int verti=0;
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        horizon+= filter_horizon[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
-                    }
-                }
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        verti+= filter_vertical[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
-                    }
-                }
-
-                resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(verti) );
-            }
-        }
-    }
-    fillForEdge(resultImage, originalImage, 4, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
-}
 
 // (4)
 void
@@ -500,9 +388,9 @@ fourLapImage(image_t *resultImage, image_t *originalImage)
     height = min(originalImage->height, resultImage->height);
 
 
-    for(y=0; y<height; y++)
+    for(y=1; y<height-1; y++)
     {
-        for(x=0; x<width; x++)
+        for(x=1; x<width-1; x++)
         {   
             
             if(x==0 || y ==0 || y==height-1 || x==width-1){}
@@ -520,14 +408,6 @@ fourLapImage(image_t *resultImage, image_t *originalImage)
         }
     }
     fillForEdge(resultImage, originalImage, 4, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
 }
 
 // (5)
@@ -546,35 +426,23 @@ eightLapImage(image_t *resultImage, image_t *originalImage)
     height = min(originalImage->height, resultImage->height);
 
 
-    for(y=0; y<height; y++)
+    for(y=1; y<height-1; y++)
     {
-        for(x=0; x<width; x++)
+        for(x=1; x<width-1; x++)
         {   
-            
-            if(x==0 || y ==0 || y==height-1 || x==width-1){}
-            else{
-                int tmp=0;
+            int tmp=0;
 
-                for(int i=-1; i<2; i++){
-                    for(int j=-1; j<2; j++){
-                        tmp+= filter[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
-                    }
+            for(int i=-1; i<2; i++){
+                for(int j=-1; j<2; j++){
+                    tmp+= filter[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
                 }
-
-                resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
             }
+
+            resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
+            
         }
     }
     fillForEdge(resultImage, originalImage, 4, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
-
 }
 
 // (6)
@@ -589,31 +457,18 @@ robertsImage(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-    for(y=0; y<height; y++)
+    for(y=0; y<height-1; y++)
     {
-        for(x=0; x<width; x++)
+        for(x=0; x<width-1; x++)
         {
-            if(y==height-1 || x==width-1){
-                //resultImage->data[x+resultImage->width*y] = 0;//originalImage->data[x+originalImage->width*y];
-            }
-            else{
-                double tmp;
-                tmp = sqrt(pow(sqrt(get_pixel_value(originalImage, x, y)) - sqrt(get_pixel_value(originalImage, x+1, y+1)),2)+
-                           pow(sqrt(get_pixel_value(originalImage, x, y+1)) - sqrt(get_pixel_value(originalImage, x+1, y)),2));
-                resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
+            double tmp;
+            tmp = sqrt(pow(sqrt(get_pixel_value(originalImage, x, y)) - sqrt(get_pixel_value(originalImage, x+1, y+1)),2)+
+                        pow(sqrt(get_pixel_value(originalImage, x, y+1)) - sqrt(get_pixel_value(originalImage, x+1, y)),2));
+            resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
                             
-            }
         }
     }
     fillForEdge(resultImage, originalImage, 2, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
-
-
 }
 
 // (7)
@@ -628,32 +483,19 @@ forsenImage(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-    for(y=0; y<height; y++)
+    for(y=0; y<height-1; y++)
     {
-        for(x=0; x<width; x++)
+        for(x=0; x<width-1; x++)
         {
-            if(y==height-1 || x==width-1){
-                resultImage->data[x+resultImage->width*y] 
-                            = originalImage->data[x+originalImage->width*y];
-            }
-            else{
-                int tmp;
-                tmp = abs(get_pixel_value(originalImage, x, y) - get_pixel_value(originalImage, x+1, y+1))+
-                    abs(get_pixel_value(originalImage, x, y+1) - get_pixel_value(originalImage, x+1, y));
+            int tmp;
+            tmp = abs(get_pixel_value(originalImage, x, y) - get_pixel_value(originalImage, x+1, y+1))+
+                abs(get_pixel_value(originalImage, x, y+1) - get_pixel_value(originalImage, x+1, y));
 
-                resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
-                            
-            }
+            resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
+        
         }
     }
     fillForEdge(resultImage, originalImage, 2, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
-
 }
 
 // (8)
@@ -671,13 +513,10 @@ rangeImage(image_t *resultImage, image_t *originalImage)
     height = min(originalImage->height, resultImage->height);
 
 
-    for(y=0; y<height; y++)
+    for(y=1; y<height-1; y++)
     {
-        for(x=0; x<width; x++)
+        for(x=1; x<width-1; x++)
         {   
-            
-            if(x==0 || y ==0 || y==height-1 || x==width-1){}
-            else{
                 int tmp=0;
                 int MAX = 0;
                 int MIN = 255;
@@ -689,18 +528,10 @@ rangeImage(image_t *resultImage, image_t *originalImage)
                     }
                 }
                 resultImage->data[x+resultImage->width*y] = int_8bit( MAX - MIN );
-            }
+            
         }
     }
     fillForEdge(resultImage, originalImage, 4, height, width);
-    // for(y=0; y<height; y++){
-    //     resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
-    //     resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
-    // }
-    // for(x=0; x<width; x++){
-    //     resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
-    //     resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
-    // }
 }
 
 double interclass_distribution(double p_i[256], int k){
@@ -740,6 +571,8 @@ bi_image(image_t *resultImage, image_t *originalImage, int T)
     int     width, height;
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
+
+    // Tによって2値化
     for(y=0; y<height; y++)
     {
         for(x=0; x<width; x++)
@@ -761,6 +594,7 @@ void histogram(double array[256]){
     }
     fclose(fp);
 }
+
 int
 k_image(image_t *resultImage, image_t *originalImage)
 {
@@ -776,7 +610,7 @@ k_image(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-
+    // 画素値の分布を計算
     for(y=0; y<height; y++)
     {
         for(x=0; x<width; x++)
@@ -785,6 +619,7 @@ k_image(image_t *resultImage, image_t *originalImage)
         }
     }
 
+    // 画素値の分布をcsvファイルに出力
     histogram(p_i);
     
 
@@ -802,6 +637,7 @@ k_image(image_t *resultImage, image_t *originalImage)
         }
     }
     printf("k = %d\n", max_k);
+
     return max_k;
 
 }
@@ -885,7 +721,7 @@ main(int argc, char **argv)
     initImage(&resultImage, originalImage.width, originalImage.height,
             originalImage.maxValue);
 
-    /* フィルタリング */
+    /* フィルタリング説明 */
     printf("(0) Prewitt フィルタ + 式 (2)\n");
     printf("(1) Prewitt フィルタ + 式 (3)\n");
     printf("(2) Sobel フィルタ + 式 (2)\n");
@@ -897,26 +733,29 @@ main(int argc, char **argv)
     printf("(8) レンジフィルタ\n");
     printf("(9) 2値化\n");
 
+    // フィルタを選択
     int filter, T;
     printf("選択してください:");
     scanf("%d", &filter);
     printf("\n");
+
+    // 選択されたフィルタを適用
     switch (filter)
     {
     case 0:
-        prewitt1Image(&resultImage, &originalImage);
+        prewittImage(&resultImage, &originalImage, 0);
         break;
 
     case 1:
-        prewitt2Image(&resultImage, &originalImage);
+        prewittImage(&resultImage, &originalImage, 1);
         break;
 
     case 2:
-        sobel1Image(&resultImage, &originalImage);
+        sobelImage(&resultImage, &originalImage, 0);
         break;
 
     case 3:
-        sobel2Image(&resultImage, &originalImage);
+        sobelImage(&resultImage, &originalImage, 1);
         break;
 
     case 4:
