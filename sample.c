@@ -107,23 +107,8 @@ readOneLine(char *buf, int n, FILE *fp)
 {
     char *fgetsResult;
 
-    do
-    {
+    do{
         fgetsResult = fgets(buf, n, fp);
-
-        // if(isspace(buf[0]))
-        // {
-        //     printf("%s", buf);
-        //     printf("True\n");
-        //     printf("サイズ%ld\n",strlen(buf));
-        // }
-        // else
-        // {
-        //     printf("%s", buf);
-        //     printf("False\n");
-        //     printf("サイズ%ld\n",strlen(buf));
-        // }
-
     } while(fgetsResult!=NULL && (buf[0]=='#' || buf[0]=='\n' ) );
             /* エラーや EOF ではなく、かつ、先頭が '#' 改行 の時は、次の行 */
             /* を読み込む */
@@ -174,11 +159,10 @@ readPgmRawHeader(FILE *fp, image_t *ptImage)
             // 数字の取得
             else if(isdigit(*buf_ptr)){
                 num[count] = strtol(buf_ptr, &end, 10);
-                printf("%d\n", num[count]);
                 count++;
                 // forでbuf_ptr++されるので先にendをデクリメント
                 buf_ptr = --end;
-                printf("end:%c\n", *end);
+                // 4つの数字が取得できたら終了
                 if(count==4)break;
             }
             // 空白を読み飛ばす
@@ -343,7 +327,7 @@ prewittImage(image_t *resultImage, image_t *originalImage, int method)
                 }
             }
             // 式(2)(3)の分岐を行う
-            if(method == 0) resultImage->data[x+resultImage->width*y] =int_8bit( sqrt(pow(horizon,2)+pow(vertical,2)) );
+            if(method == 0) resultImage->data[x+resultImage->width*y] =int_8bit( (double) sqrt(pow(horizon,2)+pow(vertical,2)) );
             if(method == 1) resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(vertical) ); 
         }
     }
@@ -384,7 +368,7 @@ sobelImage(image_t *resultImage, image_t *originalImage, int method)
                 }
             }
             // 式(2)(3)の分岐を行う
-            if(method == 0)resultImage->data[x+resultImage->width*y] = int_8bit( sqrt(pow(horizon,2)+pow(verti,2)) );
+            if(method == 0)resultImage->data[x+resultImage->width*y] = int_8bit( (double) sqrt(pow(horizon,2)+pow(verti,2)) );
             if(method == 1)resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(verti) );
         }
     }
