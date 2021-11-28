@@ -23,6 +23,7 @@ typedef struct
                             /* ポインタ */
 } image_t;
 
+ 
 
 /*======================================================================
  * このプログラムに与えられた引数の解析
@@ -642,6 +643,31 @@ k_image(image_t *resultImage, image_t *originalImage)
 
 }
 
+void exHistogram(image_t *resultImage){
+    int width = resultImage->width;
+    int height = resultImage->height;
+    int max = 0;
+    int min = 255;
+    for(int y=0; y<height; y++){
+        for(int x=0; x<width; x++){
+            if(max < get_pixel_value(resultImage, x, y) ){
+                max = get_pixel_value(resultImage, x, y);
+            }
+            if(min > get_pixel_value(resultImage, x, y) ){
+                min = get_pixel_value(resultImage, x, y);
+            }
+        }
+    }
+
+    for(int y=0; y<height; y++){
+        for(int x=0; x<width; x++){
+            resultImage->data[x+resultImage->width*y] = int_8bit( (get_pixel_value(resultImage, x, y)-min)*255/(max-min) );
+        }
+    }
+ 
+
+}
+
 
 /*======================================================================
  * PGM-RAW フォーマットのヘッダ部分の書き込み
@@ -768,6 +794,8 @@ main(int argc, char **argv)
 
     case 6:
         robertsImage(&resultImage, &originalImage);
+        // https://codezine.jp/article/detail/214
+        exHistogram(&resultImage); 
         break;
 
     case 7:
