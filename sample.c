@@ -147,42 +147,62 @@ readOneLine(char *buf, int n, FILE *fp)
  * 対して、不正な動作をする可能性がある。なるべく、本関数をそのまま使
  * 用するのではなく、正しく書き直して利用せよ。
  */
+
+// https://teratail.com/questions/303848
 void
 readPgmRawHeader(FILE *fp, image_t *ptImage)
 {
     int width, height, maxValue;
     char buf[128];
-
-    /* マジックナンバー(P5) の確認 */
-    if(readOneLine(buf, 128, fp)==NULL)
-    {
-        goto error;
+    // 一行の途中の部分のポインタを一時的に保存
+    char *end;
+    // 取得した数字を格納
+    int num[4];
+    // 取得した数字の数
+    int count=0;
+    while(1){
+        if(readOneLine(buf, 128, fp)==NULL){
+            goto error;
+        }
+        // それぞれの1行の一文字ずつについて処理
+        for(char *buf_ptr=buf; *buf_ptr!='\0'; buf_ptr++){
+            // 途中で#があったら、それ以降は読み飛ばす
+            if(*buf_ptr == '#')break;
+            // P5で始まるかどうかを確認
+            else if(count==0 && *buf_ptr=='P') ;
+            else if(count==1 && num[0]!=5)goto error;
+            // 数字の取得
+            else if(isdigit(*buf_ptr)){
+                num[count] = strtol(buf_ptr, &end, 10);
+                printf("%d\n", num[count]);
+                count++;
+                // forでbuf_ptr++されるので先にendをデクリメント
+                buf_ptr = --end;
+                printf("end:%c\n", *end);
+                if(count==4)break;
+            }
+            // 空白を読み飛ばす
+            else if(isspace(*buf_ptr)) ;
+            // 上記以外はエラー
+            else goto error;
+        }
+        // 4つの数字が取得できたら終了
+        if(count==4)break;
     }
-    if (buf[0]!='P' || buf[1]!='5')
-    {
-        goto error;
+    //最大輝度値より後のホワイトスペースは読み飛ばす
+    while(1){
+        char s = fgetc(fp);
+        if(!isspace(s)) break;
     }
-
-    /* 画像サイズの読み込み */
-    if (readOneLine(buf, 128, fp)==NULL)
-    {
-        goto error;
-    }
-    if (sscanf(buf, "%d %d", &width, &height) != 2)
-    {
-        goto error;
-    }
+    // fgetcで読みすぎた分, ポインタを戻す
+    fseek(fp, -1, SEEK_CUR);
+    // 配列からそれぞれの変数に格納
+    width = num[1];
+    height = num[2];
+    maxValue = num[3];
+    printf("Width:%d Height:%d \nMaxValue:%d\n", width, height, maxValue);
+    // Validation
     if ( width<=0 || height<=0)
-    {
-        goto error;
-    }
-
-    /* 最大画素値の読み込み */
-    if (readOneLine(buf, 128, fp)==NULL)
-    {
-        goto error;
-    }
-    if (sscanf(buf, "%d", &maxValue) != 1)
     {
         goto error;
     }
@@ -201,8 +221,6 @@ error:
     fputs("Reading PGM-RAW header was failed\n", stderr);
     exit(1);
 }
-     
-
 /*======================================================================
  * PGM-RAWフォーマットの画素値データの読み込み
  *======================================================================
@@ -221,6 +239,8 @@ readPgmRawBitmapData(FILE *fp, image_t *ptImage)
         exit(1);
     }
 }
+
+
 
 
 /*======================================================================
@@ -661,7 +681,7 @@ void exHistogram(image_t *resultImage){
 
     for(int y=0; y<height; y++){
         for(int x=0; x<width; x++){
-            resultImage->data[x+resultImage->width*y] = int_8bit( (get_pixel_value(resultImage, x, y)-min)*255/(max-min) );
+            resultImage->data[x+resultImage->width*y] = int_8bit( (double)(get_pixel_value(resultImage, x, y)-min)*255/(max-min) );
         }
     }
  
@@ -760,10 +780,13 @@ main(int argc, char **argv)
     printf("(9) 2値化\n");
 
     // フィルタを選択
-    int filter, T;
+    int filter, T, exHist;
+    
     printf("選択してください:");
     scanf("%d", &filter);
     printf("\n");
+
+    exHist = 0;
 
     // 選択されたフィルタを適用
     switch (filter)
@@ -795,7 +818,7 @@ main(int argc, char **argv)
     case 6:
         robertsImage(&resultImage, &originalImage);
         // https://codezine.jp/article/detail/214
-        exHistogram(&resultImage); 
+        exHist = 0;
         break;
 
     case 7:
@@ -814,7 +837,9 @@ main(int argc, char **argv)
     default:
         break;
     }
-    
+    if(exHist) exHistogram(&resultImage); 
+
+
     /* 画像ファイルのヘッダ部分の書き込み */
     writePgmRawHeader(outfp, &resultImage);
 
