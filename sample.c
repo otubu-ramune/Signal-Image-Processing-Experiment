@@ -255,8 +255,8 @@ filteringImage(image_t *resultImage, image_t *originalImage)
     }
 }
 /*======================================================================
- *  数字をunsighed char型に合わせて
- *  0-255までの数字にし，小数は四捨五入して返す 
+ *  数字をunsighed char型に合わせてnum
+ *  0-255までの整数にし，小数は四捨五入して返す 
  *======================================================================
  */
 int int_8bit(double num){
@@ -266,7 +266,7 @@ int int_8bit(double num){
 }
 
 /*======================================================================
- * imageのx,y座標の画素値を取得し返す
+ * image_t imageのx,y座標の画素値を取得し返す
  *======================================================================*/
 int
 get_pixel_value(image_t *image, int x, int y){
@@ -278,15 +278,18 @@ get_pixel_value(image_t *image, int x, int y){
 /*======================================================================
  * resultImageの端の処理を行う
  *======================================================================*/
+/* directionsが4だと上下左右の端を、2だと右と下の端の処理を行う*/
 void
-fillForEdge(image_t *resultImage, image_t *originalImage, int directions, int height , int width){
+fillForEdge(image_t *resultImage, int directions, int height , int width){
     int x,y;
     // 上下左右の端の処理
     if(directions == 4){
+        //y軸方向
         for(y=0; y<height; y++){
             resultImage->data[0+resultImage->width*y] = get_pixel_value(resultImage, 1, y);
             resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
         }
+        //x軸方向
         for(x=0; x<width; x++){
             resultImage->data[x+resultImage->width*0] = get_pixel_value(resultImage, x, 1);
             resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
@@ -294,15 +297,22 @@ fillForEdge(image_t *resultImage, image_t *originalImage, int directions, int he
     }
     // 右と下の端の処理
     else if(directions == 2){
+        //y軸方向
         for(y=0; y<height; y++){
             resultImage->data[(width-1) + resultImage->width*y] = get_pixel_value(resultImage, width-2, y);
         }
+        //x軸方向
         for(x=0; x<width; x++){
             resultImage->data[x+resultImage->width*(height-1)] = get_pixel_value(resultImage, x, height-2);
         }
     }    
 }
-// (0) (1)
+/*======================================================================
+ * Prewittフィルター
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像にPrewittフィルターをかけ
+ * image_t *resultImage に格納する. methodが0なら(2)の式で, 1なら(3)の式で計算を行う.
+ */
 void
 prewittImage(image_t *resultImage, image_t *originalImage, int method)
 {
@@ -318,34 +328,41 @@ prewittImage(image_t *resultImage, image_t *originalImage, int method)
     {
         for(x=1; x<width-1; x++)
         {
-            int horizon=0;
-            int vertical=0;
+            int df_i=0;
+            int df_j=0;
             for(int i=-1; i<2; i++){
                 for(int j=-1; j<2; j++){
-                    horizon += i*get_pixel_value(originalImage, x+i, y+j);
-                    vertical += j*get_pixel_value(originalImage, x+i, y+j);
+                    df_i += i*get_pixel_value(originalImage, x+i, y+j);
+                    df_j += j*get_pixel_value(originalImage, x+i, y+j);
                 }
             }
             // 式(2)(3)の分岐を行う
-            if(method == 0) resultImage->data[x+resultImage->width*y] =int_8bit( (double) sqrt(pow(horizon,2)+pow(vertical,2)) );
-            if(method == 1) resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(vertical) ); 
+            if(method == 0) resultImage->data[x+resultImage->width*y] =int_8bit( (double) sqrt(pow(df_i,2)+pow(df_j,2)) );
+            if(method == 1) resultImage->data[x+resultImage->width*y] = int_8bit( abs(df_i) + abs(df_j) ); 
         }
     }
-    fillForEdge(resultImage, originalImage, 4, height, width);
+    fillForEdge(resultImage, 4, height, width);
 }
 
 
 
 
-// (2) (3)
+/*======================================================================
+ * Sobelフィルター
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像にSobelフィルターをかけ
+ * image_t *resultImage に格納する. methodが0なら(2)の式で, 1なら(3)の式で計算を行う.
+ */
 void
 sobelImage(image_t *resultImage, image_t *originalImage, int method)
 {
     int     x, y;
     int     width, height;
+    // 水平方向フィルタ
     int filter_horizon[9] = {-1, 0, 1, 
                              -2, 0, 2, 
                              -1, 0, 1};
+    // 垂直方向フィルタ
     int filter_vertical[9] = {-1, -2, -1,
                               0, 0, 0,
                               1, 2, 1};
@@ -359,25 +376,29 @@ sobelImage(image_t *resultImage, image_t *originalImage, int method)
     {
         for(x=1; x<width-1; x++)
         {   
-            int horizon=0;
-            int verti=0;
+            int df_i=0;
+            int df_j=0;
             for(int i=-1; i<2; i++){
                 for(int j=-1; j<2; j++){
-                    horizon+= filter_horizon[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
-                    verti+= filter_vertical[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
+                    df_i+= filter_horizon[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
+                    df_j+= filter_vertical[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
                 }
             }
             // 式(2)(3)の分岐を行う
-            if(method == 0)resultImage->data[x+resultImage->width*y] = int_8bit( (double) sqrt(pow(horizon,2)+pow(verti,2)) );
-            if(method == 1)resultImage->data[x+resultImage->width*y] = int_8bit( abs(horizon) + abs(verti) );
+            if(method == 0)resultImage->data[x+resultImage->width*y] = int_8bit( (double) sqrt(pow(df_i,2)+pow(df_j,2)) );
+            if(method == 1)resultImage->data[x+resultImage->width*y] = int_8bit( abs(df_i) + abs(df_j) );
         }
     }
-    fillForEdge(resultImage, originalImage, 4, height, width);
+    fillForEdge(resultImage, 4, height, width);
 }
 
 
 
-// (4)
+/*======================================================================
+ * 4近傍ラプラシアンフィルター
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像に4近傍ラプラシアンフィルターをかけ
+ * image_t *resultImage に格納する. */
 void
 fourLapImage(image_t *resultImage, image_t *originalImage)
 {
@@ -400,22 +421,26 @@ fourLapImage(image_t *resultImage, image_t *originalImage)
             
             if(x==0 || y ==0 || y==height-1 || x==width-1){}
             else{
-                int tmp=0;
+                int grad=0;
 
                 for(int i=-1; i<2; i++){
                     for(int j=-1; j<2; j++){
-                        tmp+= filter[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
+                        grad+= filter[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
                     }
                 }
 
-                resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
+                resultImage->data[x+resultImage->width*y] = int_8bit( grad );
             }
         }
     }
-    fillForEdge(resultImage, originalImage, 4, height, width);
+    fillForEdge(resultImage, 4, height, width);
 }
 
-// (5)
+/*======================================================================
+ * 8近傍ラプラシアンフィルター
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像に8近傍ラプラシアンフィルターをかけ
+ * image_t *resultImage に格納する. */
 void
 eightLapImage(image_t *resultImage, image_t *originalImage)
 {
@@ -435,22 +460,26 @@ eightLapImage(image_t *resultImage, image_t *originalImage)
     {
         for(x=1; x<width-1; x++)
         {   
-            int tmp=0;
+            int grad=0;
 
             for(int i=-1; i<2; i++){
                 for(int j=-1; j<2; j++){
-                    tmp+= filter[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
+                    grad+= filter[(i+1) + 3*(j+1)] * get_pixel_value(originalImage, x+i, y+j);
                 }
             }
 
-            resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
+            resultImage->data[x+resultImage->width*y] = int_8bit( grad );
             
         }
     }
-    fillForEdge(resultImage, originalImage, 4, height, width);
+    fillForEdge(resultImage, 4, height, width);
 }
 
-// (6)
+/*======================================================================
+ * Robertsフィルター
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像にRobertsフィルターをかけ
+ * image_t *resultImage に格納する. */
 void
 robertsImage(image_t *resultImage, image_t *originalImage)
 {
@@ -466,17 +495,21 @@ robertsImage(image_t *resultImage, image_t *originalImage)
     {
         for(x=0; x<width-1; x++)
         {
-            double tmp;
-            tmp = sqrt(pow(sqrt(get_pixel_value(originalImage, x, y)) - sqrt(get_pixel_value(originalImage, x+1, y+1)),2)+
+            double grad;
+            grad = sqrt(pow(sqrt(get_pixel_value(originalImage, x, y)) - sqrt(get_pixel_value(originalImage, x+1, y+1)),2)+
                         pow(sqrt(get_pixel_value(originalImage, x, y+1)) - sqrt(get_pixel_value(originalImage, x+1, y)),2));
-            resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
+            resultImage->data[x+resultImage->width*y] = int_8bit( grad );
                             
         }
     }
-    fillForEdge(resultImage, originalImage, 2, height, width);
+    fillForEdge(resultImage, 2, height, width);
 }
 
-// (7)
+/*======================================================================
+ * Forsenフィルター
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像にForsenフィルターをかけ
+ * image_t *resultImage に格納する. */
 void
 forsenImage(image_t *resultImage, image_t *originalImage)
 {
@@ -492,25 +525,27 @@ forsenImage(image_t *resultImage, image_t *originalImage)
     {
         for(x=0; x<width-1; x++)
         {
-            int tmp;
-            tmp = abs(get_pixel_value(originalImage, x, y) - get_pixel_value(originalImage, x+1, y+1))+
+            int grad;
+            grad = abs(get_pixel_value(originalImage, x, y) - get_pixel_value(originalImage, x+1, y+1))+
                 abs(get_pixel_value(originalImage, x, y+1) - get_pixel_value(originalImage, x+1, y));
 
-            resultImage->data[x+resultImage->width*y] = int_8bit( tmp );
+            resultImage->data[x+resultImage->width*y] = int_8bit( grad );
         
         }
     }
-    fillForEdge(resultImage, originalImage, 2, height, width);
+    fillForEdge(resultImage, 2, height, width);
 }
 
-// (8)
+/*======================================================================
+ * レンジフィルター
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像にレンジフィルターをかけ
+ * image_t *resultImage に格納する. */
 void
 rangeImage(image_t *resultImage, image_t *originalImage)
 {
     int     x, y;
     int     width, height;
-    
-    
 
     /* originalImage と resultImage のサイズが違う場合は、共通部分のみ */
     /* を処理する。*/
@@ -536,9 +571,10 @@ rangeImage(image_t *resultImage, image_t *originalImage)
             
         }
     }
-    fillForEdge(resultImage, originalImage, 4, height, width);
+    fillForEdge(resultImage, 4, height, width);
 }
 
+// piからkのときのクラス間分散を計算する.
 double interclass_distribution(double p_i[256], int k){
     double omega_0 = 0;
     double omega_1 = 0;
@@ -555,12 +591,14 @@ double interclass_distribution(double p_i[256], int k){
     for(int i=0; i<=k; i++){
         mu_0 += i*p_i[i];
     }
-    mu_0 = omega_0==0 ? 0 : mu_0/omega_0;
+    // 0除算対応
+    mu_0 = omega_0 ?  mu_0/omega_0 : 0;
 
     for(int i=k+1; i<=255; i++){
         mu_1 += i*p_i[i];
     }
-    mu_1 = omega_1==0 ? 0 : mu_1/omega_1;
+    // 0除算対応
+    mu_1 = omega_1 ? mu_1/omega_1 : 0;
 
     for(int i=0; i<=255; i++){
         mu_T += i*p_i[i];
@@ -568,7 +606,12 @@ double interclass_distribution(double p_i[256], int k){
 
     return omega_0*pow(mu_0 - mu_T,2) + omega_1*pow(mu_1 - mu_T,2);
 }
-
+/*======================================================================
+ * 2値化
+ *======================================================================
+ *   画像構造体 image_t *originalImage の画像を閾値Tで2値化して,
+ *   image_t *resultImage に格納する
+ */
 void
 bi_image(image_t *resultImage, image_t *originalImage, int T)
 {
@@ -590,16 +633,7 @@ bi_image(image_t *resultImage, image_t *originalImage, int T)
     }  
 }
 
-void histogram(double array[256]){
-    // make csv file
-    FILE *fp;
-    fp = fopen("histogram.csv", "w");
-    for(int i=0; i<256; i++){
-        fprintf(fp, "%d,%d\n", i, (int)array[i]);
-    }
-    fclose(fp);
-}
-
+// 閾値kを求める
 int
 k_image(image_t *resultImage, image_t *originalImage)
 {
@@ -647,6 +681,22 @@ k_image(image_t *resultImage, image_t *originalImage)
 
 }
 
+// histogram.csvファイルを出力する
+void histogram(double array[256]){
+    // make csv file
+    FILE *fp;
+    fp = fopen("histogram.csv", "w");
+    for(int i=0; i<256; i++){
+        fprintf(fp, "%d,%d\n", i, (int)array[i]);
+    }
+    fclose(fp);
+}
+
+/*======================================================================
+ * ヒストグラムの拡張
+ *======================================================================
+ *  画像構造体 image_t *resultImage の画像の画素値の範囲を
+ * 0-255に拡張する. */
 void exHistogram(image_t *resultImage){
     int width = resultImage->width;
     int height = resultImage->height;
@@ -765,11 +815,11 @@ main(int argc, char **argv)
 
     // フィルタを選択
     int filter, T, exHist;
-    
     printf("選択してください:");
     scanf("%d", &filter);
     printf("\n");
 
+    // 1ならヒストグラムの拡張を行う.0ならなにもしない.
     exHist = 0;
 
     // 選択されたフィルタを適用
@@ -802,6 +852,7 @@ main(int argc, char **argv)
     case 6:
         robertsImage(&resultImage, &originalImage);
         // https://codezine.jp/article/detail/214
+        // 1ならヒストグラムの拡張を行う.0ならなにもしない.
         exHist = 0;
         break;
 
@@ -816,13 +867,22 @@ main(int argc, char **argv)
     case 9:
         T = k_image(&resultImage, &originalImage);
         bi_image(&resultImage, &originalImage, T);
+
+        /* log.csvファイルにログを出力 */
+        FILE *flog = fopen("log.csv", "a");
+        /* InputFilenameとOutputFilenameと閾値Tを保存 */
+        fprintf(flog, "\n%s, %s, %d", argv[1], argv[2], T);
+        fclose(flog);
         break;
 
     default:
+        fputs("Invalid filter number\n", stderr);
+        exit(1);
         break;
     }
-    if(exHist) exHistogram(&resultImage); 
 
+    // 1ならヒストグラムの拡張を行う.0ならなにもしない.
+    if(exHist) exHistogram(&resultImage); 
 
     /* 画像ファイルのヘッダ部分の書き込み */
     writePgmRawHeader(outfp, &resultImage);
