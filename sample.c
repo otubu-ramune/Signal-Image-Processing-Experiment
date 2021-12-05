@@ -176,6 +176,7 @@ readPgmRawHeader(FILE *fp, image_t *ptImage)
     //最大輝度値より後のホワイトスペースは読み飛ばす
     while(1){
         char s = fgetc(fp);
+        if(s==NULL)goto error;
         if(!isspace(s)) break;
     }
     // fgetcで読みすぎた分, ポインタを戻す
@@ -324,6 +325,7 @@ prewittImage(image_t *resultImage, image_t *originalImage, int method)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
+    // フィルタ計算
     for(y=1; y<height-1; y++)
     {
         for(x=1; x<width-1; x++)
@@ -341,6 +343,7 @@ prewittImage(image_t *resultImage, image_t *originalImage, int method)
             if(method == 1) resultImage->data[x+resultImage->width*y] = int_8bit( abs(df_i) + abs(df_j) ); 
         }
     }
+    // 端の処理
     fillForEdge(resultImage, 4, height, width);
 }
 
@@ -371,7 +374,7 @@ sobelImage(image_t *resultImage, image_t *originalImage, int method)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-
+    // フィルタ計算
     for(y=1; y<height-1; y++)
     {
         for(x=1; x<width-1; x++)
@@ -389,6 +392,7 @@ sobelImage(image_t *resultImage, image_t *originalImage, int method)
             if(method == 1)resultImage->data[x+resultImage->width*y] = int_8bit( abs(df_i) + abs(df_j) );
         }
     }
+    // 端の処理
     fillForEdge(resultImage, 4, height, width);
 }
 
@@ -413,7 +417,7 @@ fourLapImage(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-
+    // フィルタ計算
     for(y=1; y<height-1; y++)
     {
         for(x=1; x<width-1; x++)
@@ -433,6 +437,7 @@ fourLapImage(image_t *resultImage, image_t *originalImage)
             }
         }
     }
+    // 端の処理
     fillForEdge(resultImage, 4, height, width);
 }
 
@@ -455,7 +460,7 @@ eightLapImage(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-
+    // フィルタ計算
     for(y=1; y<height-1; y++)
     {
         for(x=1; x<width-1; x++)
@@ -472,6 +477,7 @@ eightLapImage(image_t *resultImage, image_t *originalImage)
             
         }
     }
+    // 端の処理
     fillForEdge(resultImage, 4, height, width);
 }
 
@@ -491,6 +497,7 @@ robertsImage(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
+    // フィルタ計算
     for(y=0; y<height-1; y++)
     {
         for(x=0; x<width-1; x++)
@@ -502,6 +509,7 @@ robertsImage(image_t *resultImage, image_t *originalImage)
                             
         }
     }
+    // 端の処理
     fillForEdge(resultImage, 2, height, width);
 }
 
@@ -521,6 +529,7 @@ forsenImage(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
+    // フィルタ計算
     for(y=0; y<height-1; y++)
     {
         for(x=0; x<width-1; x++)
@@ -533,6 +542,7 @@ forsenImage(image_t *resultImage, image_t *originalImage)
         
         }
     }
+    // 端の処理
     fillForEdge(resultImage, 2, height, width);
 }
 
@@ -552,7 +562,7 @@ rangeImage(image_t *resultImage, image_t *originalImage)
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
-
+    // フィルタ計算
     for(y=1; y<height-1; y++)
     {
         for(x=1; x<width-1; x++)
@@ -571,16 +581,19 @@ rangeImage(image_t *resultImage, image_t *originalImage)
             
         }
     }
+    // 端の処理
     fillForEdge(resultImage, 4, height, width);
 }
 
-// piからkのときのクラス間分散を計算する.
+// piから閾値kのときのクラス間分散を計算する.
 double interclass_distribution(double p_i[256], int k){
     double omega_0 = 0;
     double omega_1 = 0;
+    //omega0計算
     for(int i=0; i<=k; i++){
         omega_0 += p_i[i];
     }
+    //omega1計算
     for(int i=k+1; i<=255; i++){
         omega_1 += p_i[i];
     }
@@ -588,18 +601,21 @@ double interclass_distribution(double p_i[256], int k){
     double mu_0 = 0;
     double mu_1 = 0;
     double mu_T = 0;
+    // mu0計算
     for(int i=0; i<=k; i++){
         mu_0 += i*p_i[i];
     }
     // 0除算対応
     mu_0 = omega_0 ?  mu_0/omega_0 : 0;
 
+    // mu1計算
     for(int i=k+1; i<=255; i++){
         mu_1 += i*p_i[i];
     }
     // 0除算対応
     mu_1 = omega_1 ? mu_1/omega_1 : 0;
 
+    // muT計算
     for(int i=0; i<=255; i++){
         mu_T += i*p_i[i];
     }
@@ -617,6 +633,8 @@ bi_image(image_t *resultImage, image_t *originalImage, int T)
 {
     int     x, y;
     int     width, height;
+    /* originalImage と resultImage のサイズが違う場合は、共通部分のみ */
+    /* を処理する。*/
     width = min(originalImage->width, resultImage->width);
     height = min(originalImage->height, resultImage->height);
 
@@ -631,6 +649,17 @@ bi_image(image_t *resultImage, image_t *originalImage, int T)
             resultImage->data[x+resultImage->width*y] = bi;
         }
     }  
+}
+
+// histogram.csvファイルを出力する
+void histogram(double array[256]){
+    // make csv file
+    FILE *fp;
+    fp = fopen("histogram.csv", "w");
+    for(int i=0; i<256; i++){
+        fprintf(fp, "%d,%d\n", i, (int)array[i]);
+    }
+    fclose(fp);
 }
 
 // 閾値kを求める
@@ -661,7 +690,7 @@ k_image(image_t *resultImage, image_t *originalImage)
     // 画素値の分布をcsvファイルに出力
     histogram(p_i);
     
-
+    // piの計算
     for(int i=0; i<256; i++){
         p_i[i] = p_i[i]/width/height;
     }
@@ -669,28 +698,20 @@ k_image(image_t *resultImage, image_t *originalImage)
 
     double MAX = DBL_MIN;
     int max_k;
+    /* クラス間分散が最大となる閾値を求める */
     for(int k=1; k<256; k++){
         if(interclass_distribution(p_i, k)>MAX){
             MAX = interclass_distribution(p_i, k);
             max_k = k;
         }
     }
-    printf("k = %d\n", max_k);
+    printf("T = %d\n", max_k);
 
     return max_k;
 
 }
 
-// histogram.csvファイルを出力する
-void histogram(double array[256]){
-    // make csv file
-    FILE *fp;
-    fp = fopen("histogram.csv", "w");
-    for(int i=0; i<256; i++){
-        fprintf(fp, "%d,%d\n", i, (int)array[i]);
-    }
-    fclose(fp);
-}
+
 
 /*======================================================================
  * ヒストグラムの拡張
@@ -826,30 +847,37 @@ main(int argc, char **argv)
     switch (filter)
     {
     case 0:
+        /* Prewitt フィルタ + 式 (2)適用 */
         prewittImage(&resultImage, &originalImage, 0);
         break;
 
     case 1:
+        /* Prewitt フィルタ + 式 (3)適用 */
         prewittImage(&resultImage, &originalImage, 1);
         break;
 
     case 2:
+        /* Sobel フィルタ + 式 (2)適用 */
         sobelImage(&resultImage, &originalImage, 0);
         break;
 
     case 3:
+        /* Sobel フィルタ + 式 (3)適用 */
         sobelImage(&resultImage, &originalImage, 1);
         break;
 
     case 4:
+        /* 4 近傍ラプラシアンフィルタ適用 */
         fourLapImage(&resultImage, &originalImage);
         break;
 
     case 5:
+        /* 8 近傍ラプラシアンフィルタ適用 */
         eightLapImage(&resultImage, &originalImage);
         break;
 
     case 6:
+        /* Roberts フィルタ適用 */
         robertsImage(&resultImage, &originalImage);
         // https://codezine.jp/article/detail/214
         // 1ならヒストグラムの拡張を行う.0ならなにもしない.
@@ -857,15 +885,19 @@ main(int argc, char **argv)
         break;
 
     case 7:
+        /* Forsen フィルタ適用 */
         forsenImage(&resultImage, &originalImage);
         break;
 
     case 8:
+        /* レンジフィルタ適用 */
         rangeImage(&resultImage, &originalImage);
         break;
     
     case 9:
+        /* 大津の方法で2値化の閾値を求める */
         T = k_image(&resultImage, &originalImage);
+        /* 求めた閾値Tから2値化を行う */
         bi_image(&resultImage, &originalImage, T);
 
         /* log.csvファイルにログを出力 */
