@@ -98,7 +98,7 @@ initImage(image_t *ptImage, int width, int height, int maxValue)
  *   FILE *fp から、改行文字'\n'が表れるまで文字を読み込んで、char型の
  * メモリ領域 char *buf に格納する。1行の長さが n 文字以上の場合は、先
  * 頭から n-1 文字だけを読み込む。
- *   読み込んだ文字列の先頭が '#' の場合は、さらに次の行を読み込む。
+ *   読み込んだ文字列の先頭が '#' '\n' の場合は、さらに次の行を読み込む。
  *   正常に読み込まれた場合は、ポインタ buf を返し、エラーや EOF (End
  * Of File) の場合は NULL を返す。
  */
@@ -133,7 +133,7 @@ readOneLine(char *buf, int n, FILE *fp)
  * 用するのではなく、正しく書き直して利用せよ。
  */
 
-// https://teratail.com/questions/303848
+
 void
 readPgmRawHeader(FILE *fp, image_t *ptImage)
 {
@@ -173,14 +173,16 @@ readPgmRawHeader(FILE *fp, image_t *ptImage)
         // 4つの数字が取得できたら終了
         if(count==4)break;
     }
-    //最大輝度値より後のホワイトスペースは読み飛ばす
-    while(1){
-        char s = fgetc(fp);
-        if(s==NULL)goto error;
-        if(!isspace(s)) break;
-    }
-    // fgetcで読みすぎた分, ポインタを戻す
-    fseek(fp, -1, SEEK_CUR);
+
+    // //最大輝度値より後のホワイトスペースは読み飛ばす
+    // char s;
+    // while(1){
+    //     s = fgetc(fp);
+    //     if(!isspace(s)) break;
+    // }
+    // // fgetcで読みすぎた分, ポインタを戻す
+    // ungetc(s, fp);
+
     // 配列からそれぞれの変数に格納
     width = num[1];
     height = num[2];
@@ -215,6 +217,8 @@ error:
 void
 readPgmRawBitmapData(FILE *fp, image_t *ptImage)
 {
+    // ファイル終端から画素分ポインタを前にずらす
+    fseek(fp, -sizeof(unsigned char)*ptImage->width*ptImage->height, SEEK_END);
     if( fread(ptImage->data, sizeof(unsigned char),
             ptImage->width * ptImage->height, fp)
             != ptImage->width * ptImage->height )
@@ -224,9 +228,6 @@ readPgmRawBitmapData(FILE *fp, image_t *ptImage)
         exit(1);
     }
 }
-
-
-
 
 /*======================================================================
  * フィルタリング(ネガポジ反転)
@@ -664,11 +665,12 @@ void histogram(double array[256]){
 
 // 閾値kを求める
 int
-k_image(image_t *resultImage, image_t *originalImage)
+OotsuT(image_t *resultImage, image_t *originalImage)
 {
     int     x, y;
     int     width, height;
     double p_i[256];
+    // piの初期化
     for(int i=0; i<256; i++)
         p_i[i] = 0;
     
@@ -683,9 +685,10 @@ k_image(image_t *resultImage, image_t *originalImage)
     {
         for(x=0; x<width; x++)
         {   
-            p_i[originalImage->data[x+originalImage->width*y]]+=1;
+            p_i[get_pixel_value(originalImage, x, y)]+=1;
         }
     }
+
 
     // 画素値の分布をcsvファイルに出力
     histogram(p_i);
@@ -705,7 +708,7 @@ k_image(image_t *resultImage, image_t *originalImage)
             max_k = k;
         }
     }
-    printf("T = %d\n", max_k);
+    printf("閾値T = %d\n", max_k);
 
     return max_k;
 
@@ -723,6 +726,7 @@ void exHistogram(image_t *resultImage){
     int height = resultImage->height;
     int max = 0;
     int min = 255;
+    /* 最大最小を求める */
     for(int y=0; y<height; y++){
         for(int x=0; x<width; x++){
             if(max < get_pixel_value(resultImage, x, y) ){
@@ -733,7 +737,7 @@ void exHistogram(image_t *resultImage){
             }
         }
     }
-
+    // 0-255に拡張する
     for(int y=0; y<height; y++){
         for(int x=0; x<width; x++){
             resultImage->data[x+resultImage->width*y] = int_8bit( (double)(get_pixel_value(resultImage, x, y)-min)*255/(max-min) );
@@ -823,23 +827,24 @@ main(int argc, char **argv)
             originalImage.maxValue);
 
     /* フィルタリング説明 */
-    printf("(0) Prewitt フィルタ + 式 (2)\n");
-    printf("(1) Prewitt フィルタ + 式 (3)\n");
-    printf("(2) Sobel フィルタ + 式 (2)\n");
-    printf("(3) Sobel フィルタ + 式 (3)\n");
-    printf("(4) 4 近傍ラプラシアンフィルタ\n");
-    printf("(5) 8 近傍ラプラシアンフィルタ\n");
-    printf("(6) Robers フィルタ\n");
-    printf("(7) Forsen フィルタ\n");
-    printf("(8) レンジフィルタ\n");
+    printf("(0) a Prewitt フィルタ + 式 (2)\n");
+    printf("(1) b Prewitt フィルタ + 式 (3)\n");
+    printf("(2) c Sobel フィルタ + 式 (2)\n");
+    printf("(3) d Sobel フィルタ + 式 (3)\n");
+    printf("(4) e 4 近傍ラプラシアンフィルタ\n");
+    printf("(5) f 8 近傍ラプラシアンフィルタ\n");
+    printf("(6) g Roberts フィルタ\n");
+    printf("(7) h Forsen フィルタ\n");
+    printf("(8) i レンジフィルタ\n");
     printf("(9) 2値化\n");
+
 
     // フィルタを選択
     int filter, T, exHist;
     printf("選択してください:");
     scanf("%d", &filter);
     printf("\n");
-
+    
     // 1ならヒストグラムの拡張を行う.0ならなにもしない.
     exHist = 0;
 
@@ -896,15 +901,9 @@ main(int argc, char **argv)
     
     case 9:
         /* 大津の方法で2値化の閾値を求める */
-        T = k_image(&resultImage, &originalImage);
+        T = OotsuT(&resultImage, &originalImage);
         /* 求めた閾値Tから2値化を行う */
         bi_image(&resultImage, &originalImage, T);
-
-        /* log.csvファイルにログを出力 */
-        FILE *flog = fopen("log.csv", "a");
-        /* InputFilenameとOutputFilenameと閾値Tを保存 */
-        fprintf(flog, "\n%s, %s, %d", argv[1], argv[2], T);
-        fclose(flog);
         break;
 
     default:
